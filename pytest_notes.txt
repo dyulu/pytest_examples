@@ -1,0 +1,344 @@
+
+==== conftest.py:
+    a special file used by the pytest framework
+    a local plugin for pytest where you can define fixtures, hooks, plugins, and other configuration settings that can be shared across multiple test files
+    typically placed in the root directory of your test suite
+    can also be placed in subdirectories to create more localized configurations
+    pytest will automatically discover conftest.py files in the directories it's running tests in
+    pytest will use them to configure the testing environment
+
+Fixtures:
+    functions that pytest will run before your tests
+    used to set up things like database connections, sample data, or other prerequisites for your tests
+    can define them in conftest.py and use them in any of your test files
+
+Hooks:
+    special functions that pytest calls at certain points during testing
+    e.g., use hooks to customize the way tests are reported, or to run code before and after each test or each test module
+
+Plugins:
+    your custom plugins for pytest can be included them in conftest.py so they're available to all your tests
+
+Configuration settings:
+    can use conftest.py to set configuration options that pytest will use when running your tests
+
+==== Fixture: a function that is used to set up some data or a system state, or even a configuration
+
+Built-in parameters to @pytest.fixture:
+    scope:   controls the lifetime of a fixture
+        function: the default; invoked once per test function
+        class:    invoked once per test class
+        module:   invoked once per module
+        session:  invoked once per test session
+    autouse: True -- the fixture is automatically used by tests, without needing to be specified as a parameter
+    params:  a list of parameters which will be fed to the fixture
+    ids:     a list of strings to use as ids for the parameters
+    name:    a string to use as the name of the fixture
+
+==== Fixture example with conftest.py
+
+# conftest.py
+import pytest
+from myapp import create_app
+
+@pytest.fixture
+def client():
+    app = create_app()
+    app.config['TESTING'] = True
+
+    with app.test_client() as client:
+        yield client
+
+    # tear-down code goes here if any
+
+# test_example.py; note how client from the fixture is used
+def test_index(client):
+    rv = client.get('/')
+    assert rv.status_code == 200
+
+==== Hooks: commonly used pytest hooks to customize pytest behavior
+
+pytest_addoption(parser):
+    called once command line options have been parsed
+    can add your own command line options here
+
+pytest_configure(config):
+    called before any test or collection procedures are invoked
+
+pytest_collection_modifyitems(session, config, items):
+    called after collection has been performed
+    allows modification of the test items collected
+
+pytest_runtest_protocol(item, nextitem):
+    called for each test item (i.e., a function or method that starts with test_)
+    can implement your own test protocol for running tests if you want
+
+pytest_runtest_logstart(nodeid, location):
+    called before a test starts running
+
+pytest_runtest_logfinish(nodeid, location):
+    called after a test has finished running
+
+pytest_runtest_makereport(item, call):
+    called when a test report is being generated for a test run
+
+pytest_report_teststatus(report, config):
+    called when pytest needs to determine the status of the test run (whether it passed, failed, etc.)
+
+pytest_exception_interact(node, call, report):
+    called when an exception is encountered
+
+pytest_sessionstart(session):
+    called before the test session starts
+
+pytest_sessionfinish(session, exitstatus):
+    called after the test session finishes
+
+pytest_terminal_summary(terminalreporter, exitstatus, config):
+    called after all tests have been run, right before pytest exits
+
+==== Hook example with conftest.py
+
+# conftest.py
+# print a message before and after each test is run
+# item:     the test function that is about to be run
+# nextitem: the next test function in the queue
+import pytest
+
+def pytest_runtest_protocol(item, nextitem):
+    print("\nStarting test: ", item.nodeid)
+
+    # Run the test function
+    outcome = pytest.runner.call_and_report(item, "call", log=True)
+
+    print("\nFinished test: ", item.nodeid)
+
+    return outcome.get_result()
+
+==== Plugin example with conftest.py
+
+Plugins are used to extend the functionality of the pytest framework
+To create a plugin, you define a new Python module or package that includes one or more hook functions
+
+# conftest.py
+# adds a command-line option that allows the user to specify a custom message to be printed before each test is run
+def pytest_addoption(parser):
+    parser.addoption("--custom-message", action="store", default="Running test", help="Custom message to display before running each test")
+
+def pytest_runtest_protocol(item, nextitem):
+    custom_message = item.config.getoption("--custom-message")
+    print("\n" + custom_message + ": ", item.nodeid)
+
+    # Continue with the default test protocol
+    return None
+
+==== Configuration options example with conftest.py
+
+# conftest.py
+# set a configuration value using a command-line option
+# new 'Environment' metadata can be accessed in your pytest or other hook functions: request.config._metadata.get('Environment', 'dev')
+# request object is a built-in fixture
+def pytest_addoption(parser):
+    parser.addoption("--environment", action="store", default="dev", help="Set the environment for the tests")
+
+def pytest_configure(config):
+    config._metadata['Environment'] = config.getoption("--environment")
+
+# test_example.py
+def test_example(request):
+    environment = request.config._metadata.get('Environment', 'dev')
+    print(f'Testing in {environment} environment')
+
+    # Your test code here...
+
+# fixture_example.py
+@pytest.fixture
+def db_connection(request):
+    environment = request.config._metadata.get('Environment', 'dev')
+
+    if environment == 'dev':
+        # Connect to the dev database
+        db = connect_to_dev_db()
+    elif environment == 'staging':
+        # Connect to the staging database
+        db = connect_to_staging_db()
+    else:
+        # Connect to the production database
+        db = connect_to_prod_db()
+
+    yield db
+
+    # Close the database connection
+    db.close()
+
+==== pytest built-in fixtures
+
+no need to import them
+automatically available in your tests when you're using pytest
+use them by including them as arguments in your test functions or fixtures
+
+request:
+    provides information about the current test function, class, module, or session
+
+tmp_path:
+    provides a temporary directory unique to the test invocation, created in the base temporary directory
+
+tmp_path_factory:
+    make session-scoped temporary directories and return pathlib.Path objects
+
+tmpdir:
+    older version of tmp_path, provides a temporary directory path with py.path.local object
+
+tmpdir_factory:
+    make session-scoped temporary directories and return py.path.local objects
+
+capsys:
+    capture writes to sys.stdout and sys.stderr
+
+capsysbinary:
+    capture writes to sys.stdout and sys.stderr as bytes
+
+capfd:
+    capture writes to file descriptors 1 and 2
+
+capfdbinary:
+    capture writes to file descriptors 1 and 2 as bytes
+
+capslog:
+    control logging and access log entries
+
+recwarn:
+    record warnings emitted by test functions
+
+monkeypatch:
+    temporarily modify classes, functions, dictionaries, os.environ, and other objects
+
+pytestconfig:
+    access to the pytest configuration object
+
+doctest_namespace:
+    provide a dict injected into the docstrings namespace when executing them
+
+cache:
+    store and retrieve values across pytest runs
+
+record_property:
+    add extra properties to the test
+
+record_testsuite_property:
+    add properties to the test suite
+
+caplog:
+    control log capturing and access log entries
+
+==== pytest request object
+
+request.node:
+    represents the test function, class, module, or session that is currently being executed
+    has several useful properties:
+        name:   the name of the test
+        parent: the parent of the current node in the test hierarchy
+        module: the Python module that the test is defined in
+
+request.cls:
+    the test class that is currently being executed
+    only set if the test is a method inside a test class
+
+request.module:
+    Python module that the current test function or class is defined in
+
+request.function:
+    the test function that is currently being executed
+
+request.session:
+    the pytest session object, which represents the entire pytest run
+
+request.config:
+    the pytest configuration object, which contains the configuration settings and options for the current pytest run
+
+request.param:
+    If the test function or fixture is parametrized, this contains the current parameter value
+
+request.fixturename:
+    If the request object is being used inside a fixture, this contains the name of that fixture
+
+request.node.get_closest_marker(name):
+    returns the closest marker with the given name to the current test. If no such marker exists, it returns None.
+
+request.node.get_marker(name):
+    returns all markers with the given name on the current test. If no such markers exist, it returns an empty list.
+
+==== pytest request.config object
+
+request.config.args:
+    a list of the command-line arguments that were passed to pytest
+
+request.config.pluginmanager:
+    an instance of the _pytest.config.PytestPluginManager class, which manages all the plugins for the current pytest run
+
+request.config.rootdir:
+    a py.path.local object representing the root directory of the pytest run
+
+request.config.inifile:
+    a py.path.local object representing the ini-file that pytest is using for configuration, or None if no ini-file is being used
+
+request.config.getoption(name):
+    returns the value of the command-line option with the given name
+    If the option was not set on the command line, it returns the default value for that option
+
+request.config.getini(name):
+    returns the value of the ini-file setting with the given name
+    If the setting was not set in the ini-file, it returns the default value for that setting
+
+request.config.addinivalue_line(name, line):
+    adds a new line to the value of the ini-file setting with the given name
+
+request.config._metadata:
+    a dictionary that can be used to store custom metadata for the pytest run
+    This metadata can be accessed in your tests or in other hook functions
+
+==== pytest built-in plugins
+
+python:
+    provides pytest's core functionality for testing Python code
+    provides the ability to collect Python test functions and classes, run tests, and report the results
+
+terminal:
+    provides the command-line interface, including the ability to select tests, control test execution, and display test results in the terminal
+
+markers:
+    provides support for markers, which are a way to add metadata to your tests
+    can use markers to categorize the tests or to change the behavior of certain tests
+
+doctest:
+    provides support for doctests, which are a way to write tests as part of your Python docstrings
+
+monkeypatch:
+    provides the monkeypatch fixture, which can be used to safely modify the behavior of objects, dictionaries, classes, functions, etc during your tests
+
+capture:
+    provides support for capturing output from sys.stdout, sys.stderr and sys.stdin, via the capsys and capfd fixtures
+
+tmpdir:
+    provides the tmpdir fixture, which can be used to create temporary directories and files for your tests
+
+recwarn:
+    provides the recwarn fixture, which can be used to record warnings emitted by your tests
+
+pastebin:
+    provides the ability to upload test results to a pastebin service
+
+helpconfig:
+    provides the --help option for the pytest command-line interface
+
+debugging:
+    provides the --pdb option, which drops you into the pdb debugger on test failures
+
+unittest:
+    provides support for running tests written using Python's built-in unittest module
+
+skipping:
+    provides the skip and skipif markers, which you can use to skip certain tests
+
+main:
+    provides the main entry point for running pytest
